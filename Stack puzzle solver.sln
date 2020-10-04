@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30509.190
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Stack puzzle solver", "Stack puzzle solver.fsproj", "{AC877174-92FD-49D5-B9F4-8E539086DDDA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AC877174-92FD-49D5-B9F4-8E539086DDDA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AC877174-92FD-49D5-B9F4-8E539086DDDA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AC877174-92FD-49D5-B9F4-8E539086DDDA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AC877174-92FD-49D5-B9F4-8E539086DDDA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {55983A65-A949-4765-BBE4-B0A8197D7547}
+	EndGlobalSection
+EndGlobal
