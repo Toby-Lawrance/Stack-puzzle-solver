@@ -31,20 +31,10 @@ let StepToPlace (step: int) =
     | 3 -> Bottom
     | _ -> failwith "Value off the stack"
 
-let StackToString s =
-    s
-    |> List.mapFold (fun acc elem ->
-        let str = elem.ToString()
-        str, sprintf "%s,%s" acc str) ""
-    |> snd
-    |> sprintf "(%s)"
-
-
 let StateToString s =
-    // TODO delete me
     s
     |> List.mapFold (fun acc stack ->
-        let str = StackToString stack
+        let str = string stack
         str, sprintf "%s,%s" acc str) ""
     |> snd
     |> sprintf "[%s]"
