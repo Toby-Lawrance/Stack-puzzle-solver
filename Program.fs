@@ -3,13 +3,14 @@
 open System
 open System.Collections.Immutable
 
-type Piece = char
+type Piece = Piece of char
 
 type Index = Index of int
 type Stack = { stack: Piece list; index: Index }
     with override this.ToString () =
             this.stack
             |> Array.ofList
+            |> Array.map (fun (Piece c) -> c)
             |> String.Concat
             |> sprintf "(%s)"
 
@@ -43,7 +44,7 @@ let readPiece step stackNo =
 
     let c = Console.ReadKey().KeyChar
     Console.Clear()
-    c
+    Piece c
 
 let readStack stackNo =
     { stack = [ 0 .. 3 ] |> List.map (fun i -> readPiece i stackNo)
