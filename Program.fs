@@ -14,7 +14,7 @@ type Stack = { stack: Piece list; index: Index }
             |> String.Concat
             |> sprintf "(%s)"
 
-type State = Stack list
+type State = State of Stack list
 
 type Place =
     | Top
@@ -86,21 +86,21 @@ let GenerateMoves (s) =
 
     GenerateMoves' s s.Value.value [] []
 
-let CheckSolved (s: State) =
+let CheckSolved (State s) =
     let CheckStack st = true
     List.forall CheckStack s
 
 
-let Solve (s: State) =
+let Solve (State s) =
     let rec Solve' (pred) (queue) =
         match queue with
         | [] -> None
         | x :: _ when pred x.value -> Some x
         | x :: xs -> Solve' pred (xs @ GenerateMoves(Some x))
 
-    Solve' CheckSolved [ { value = s; parent = None } ]
+    Solve' CheckSolved [ { value = State s; parent = None } ]
 
-let generatePairs (state: Stack list) =
+let generatePairs (State state) =
     query {
         for stack1 in state do
             join stack2 in state on (true = true)
