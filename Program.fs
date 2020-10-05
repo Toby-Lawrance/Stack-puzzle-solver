@@ -31,33 +31,26 @@ let StepToPlace (step: int) =
     | 3 -> Bottom
     | _ -> failwith "Value off the stack"
 
-let StateToString s =
+let stateToString s =
     s
-    |> List.mapFold (fun acc stack ->
-        let str = string stack
-        str, sprintf "%s,%s" acc str) ""
-    |> snd
+    |> List.map string
+    |> String.concat ","
     |> sprintf "[%s]"
 
 
-let ReadPiece (step) (stackNo): Piece =
-    printf "Enter a piece character (space for blank) for the %A piece on stack %i:" (StepToPlace step) stackNo
+let readPiece step stackNo =
+    printf "Enter a piece character (space for blank) for the %A piece on stack %i: " (StepToPlace step) stackNo
 
     let c = Console.ReadKey().KeyChar
     Console.Clear()
     c
 
+let readStack stackNo =
+    { stack = [ 0 .. 3 ] |> List.map (fun i -> readPiece i stackNo)
+      index = Index stackNo }
 
-
-let ReadStack (stackNo: int): ImmutableStack =
-    //(ReadPiece 0 stackNo, ReadPiece 1 stackNo, ReadPiece 2 stackNo, ReadPiece 3 stackNo)
-    // TODO implement me
-    failwith "TODO"
-
-let rec ReadInitialState (stacks: int) (builtState: State): State =
-    match stacks with
-    | 0 -> builtState
-    | _ -> ReadInitialState (stacks - 1) (ReadStack stacks :: builtState)
+let rec readInitialState stacks =
+    [ 1 .. stacks ] |> List.map readStack
 
 let GenerateMoves (s) =
     let GenerateStateFromMove (baseNode) (f, t) (f2, t2) = None
@@ -119,10 +112,10 @@ let generatePairs (state: Stack list) =
 let main argv =
     try
         Console.Write("Enter the number of stacks: ")
-        let x = Console.ReadLine()
-        let initState = ReadInitialState (int (x)) []
-        Console.WriteLine(StateToString initState)
-        Console.WriteLine((Solve initState))
+        let numberOfStacks = Console.ReadLine() |> int
+        let initState = readInitialState numberOfStacks
+        Console.WriteLine(stateToString initState)
+//        Console.WriteLine((Solve initState))
     with :? FormatException -> printfn "Invalid Number"
 
     0 // return an integer exit code
