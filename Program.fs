@@ -3,17 +3,18 @@
 open System
 open System.Collections.Immutable
 
-type Piece = char
+type Piece = Piece of char
 
 type Index = Index of int
 type Stack = { stack: Piece list; index: Index }
     with override this.ToString () =
             this.stack
             |> Array.ofList
+            |> Array.map (fun (Piece c) -> c)
             |> String.Concat
             |> sprintf "(%s)"
 
-type State = Stack list
+type State = State of Stack list
 
 type Place =
     | Top
@@ -43,7 +44,7 @@ let readPiece step stackNo =
 
     let c = Console.ReadKey().KeyChar
     Console.Clear()
-    c
+    Piece c
 
 let readStack stackNo =
     { stack = [ 0 .. 3 ] |> List.map (fun i -> readPiece i stackNo)
@@ -85,21 +86,21 @@ let GenerateMoves (s) =
 
     GenerateMoves' s s.Value.value [] []
 
-let CheckSolved (s: State) =
+let CheckSolved (State s) =
     let CheckStack st = true
     List.forall CheckStack s
 
 
-let Solve (s: State) =
+let Solve (State s) =
     let rec Solve' (pred) (queue) =
         match queue with
         | [] -> None
         | x :: _ when pred x.value -> Some x
         | x :: xs -> Solve' pred (xs @ GenerateMoves(Some x))
 
-    Solve' CheckSolved [ { value = s; parent = None } ]
+    Solve' CheckSolved [ { value = State s; parent = None } ]
 
-let generatePairs (state: Stack list) =
+let generatePairs (State state) =
     query {
         for stack1 in state do
             join stack2 in state on (true = true)
