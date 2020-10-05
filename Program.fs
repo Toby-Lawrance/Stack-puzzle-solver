@@ -3,18 +3,32 @@
 open System
 open System.Collections.Immutable
 
+[<Literal>]
+let maxStackSize = 4
+
 type Piece = Piece of char
 
 type Index = Index of int
-type Stack = { stack: Piece list; index: Index }
-    with override this.ToString () =
-            this.stack
-            |> Array.ofList
-            |> Array.map (fun (Piece c) -> c)
-            |> String.Concat
-            |> sprintf "(%s)"
 
-type State = State of Stack list
+type Stack =
+    { stack: Piece list
+      index: Index }
+    override this.ToString() =
+        this.stack
+        |> Array.ofList
+        |> Array.map (fun (Piece c) -> c)
+        |> String.Concat
+        |> sprintf "(%s)"
+
+type State =
+    | State of Stack list
+    override this.ToString() =
+        let (State s) = this
+
+        s
+        |> List.map string
+        |> String.concat ","
+        |> sprintf "[%s]"
 
 type Place =
     | Top
@@ -22,7 +36,16 @@ type Place =
     | Third
     | Bottom
 
-type Node<'a> = { value: 'a; parent: Node<'a> option }
+type Node<'a> =
+    { value: 'a
+      parent: Node<'a> option }
+    override this.ToString() =
+        Some this
+        |> List.unfold (Option.map (fun c -> (c.value,c.parent)))
+        |> List.rev
+        |> List.map string
+        |> String.concat ",\n"
+        |> sprintf "<%s>"
 
 let StepToPlace (step: int) =
     match step with
@@ -32,82 +55,83 @@ let StepToPlace (step: int) =
     | 3 -> Bottom
     | _ -> failwith "Value off the stack"
 
-let stateToString s =
-    s
-    |> List.map string
-    |> String.concat ","
-    |> sprintf "[%s]"
-
-
 let readPiece step stackNo =
     printf "Enter a piece character (space for blank) for the %A piece on stack %i: " (StepToPlace step) stackNo
 
     let c = Console.ReadKey().KeyChar
     Console.Clear()
-    Piece c
+
+    match c with
+    | ' ' -> None
+    | x -> Some(Piece x)
 
 let readStack stackNo =
-    { stack = [ 0 .. 3 ] |> List.map (fun i -> readPiece i stackNo)
+    { stack =
+          [ 0 .. 3 ]
+          |> List.choose (fun i -> readPiece i stackNo)
       index = Index stackNo }
 
 let rec readInitialState stacks =
-    [ 1 .. stacks ] |> List.map readStack
+    [ 1 .. stacks ] |> List.map readStack |> State
 
-let GenerateMoves (s) =
-    let GenerateStateFromMove (baseNode) (f, t) (f2, t2) = None
-    let GenerateMove (baseNode) (f, t): Node<State> option = None
+let GenerateMoves (s: Node<State>) (queue : Node<State> list) (visited : Node<State> list): Node<State> list =
+    let generatePairs (State state) =
+        query {
+            for stack1 in state do
+                join stack2 in state on (true = true)
+                where (stack1.index <> stack2.index)
+                select (stack1, stack2)
+        }
+        |> Seq.toList
 
-    let rec GenerateMovesFromStack (baseNode: Node<State> option)
-                                   (s: ImmutableStack)
-                                   (o: ImmutableStack list)
-                                   (stacksMoves: Node<State> list)
-                                   : Node<State> list =
-        match o with
-        | [] -> stacksMoves
-        | x :: xs ->
-            let move = GenerateMove baseNode (s, x)
+    let allowedMove (source, target) =
+        match (source.stack, target.stack) with
+        | (s :: _, t :: _) when (s = t)
+                                && (List.length target.stack) < maxStackSize -> true
+        | (s :: _, []) -> true
+        | (_, _) -> false
 
-            match move with
-            | Some mv -> GenerateMovesFromStack baseNode s xs (mv :: stacksMoves)
-            | _ -> GenerateMovesFromStack baseNode s xs stacksMoves
+    let rec makeMove (source, target) =
+        match (source.stack, target.stack) with
+        | ((s :: ss), ts) ->
+            match ({ source with stack = ss }, { target with stack = (s :: ts) }) with
+            | (so, ta) when allowedMove (so, ta) -> makeMove (so, ta)
+            | (so, ta) -> (so, ta)
+        | _ -> failwith "We were wrong about this never happening in makeMove"
 
-    let rec GenerateMoves' (baseNode: Node<State> option)
-                           (postState: State)
-                           (preState: State)
-                           (foundMoves: Node<State> list)
-                           : Node<State> list =
-        match postState with
-        | [] -> foundMoves
-        | x :: xs ->
-            let moves =
-                GenerateMovesFromStack baseNode x (xs @ preState)
+    let makeState (State oldState) (source, target) =
+        oldState
+        |> List.map (function
+            | s when s.index = source.index -> source
+            | s when s.index = target.index -> target
+            | s -> s)
+        |> State
 
-            GenerateMoves' baseNode xs (x :: preState) (moves foundMoves)
-
-    GenerateMoves' s s.Value.value [] []
+    s.value
+    |> generatePairs
+    |> List.filter allowedMove
+    |> List.map makeMove
+    |> List.map (makeState s.value)
+    |> List.map (fun state -> { value = state; parent = Some s }) //This is all our possible new moves
+    |> List.filter (fun move -> ( not(List.contains move.value (List.map (fun getState -> getState.value) queue)) && not(List.contains move.value (List.map (fun getState -> getState.value) visited))) )
+    |> List.append queue
 
 let CheckSolved (State s) =
-    let CheckStack st = true
+    let CheckStack st =
+        (List.isEmpty st.stack)
+        || ((List.forall (fun x -> (x = st.stack.Head)) st.stack)
+            && (List.length st.stack) = maxStackSize)
+
     List.forall CheckStack s
 
-
 let Solve (State s) =
-    let rec Solve' (pred) (queue) =
+    let rec Solve' (pred) (queue) (visited) =
         match queue with
         | [] -> None
         | x :: _ when pred x.value -> Some x
-        | x :: xs -> Solve' pred (xs @ GenerateMoves(Some x))
+        | x :: xs -> Solve' pred (GenerateMoves x xs visited) (x::visited)
 
-    Solve' CheckSolved [ { value = State s; parent = None } ]
-
-let generatePairs (State state) =
-    query {
-        for stack1 in state do
-            join stack2 in state on (true = true)
-            where (stack1.index <> stack2.index)
-            select (stack1, stack2)
-    }
-
+    Solve' CheckSolved [ { value = State s; parent = None } ] []
 
 [<EntryPoint>]
 let main argv =
@@ -115,8 +139,10 @@ let main argv =
         Console.Write("Enter the number of stacks: ")
         let numberOfStacks = Console.ReadLine() |> int
         let initState = readInitialState numberOfStacks
-        Console.WriteLine(stateToString initState)
-//        Console.WriteLine((Solve initState))
+        Console.WriteLine(initState)
+        match Solve initState with
+        | None -> printfn "No solution found"
+        | Some x -> printfn "%s" (x.ToString())
     with :? FormatException -> printfn "Invalid Number"
 
     0 // return an integer exit code
