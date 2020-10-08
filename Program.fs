@@ -92,7 +92,10 @@ let readStack stackNo =
 let rec readInitialState stacks =
     [ 1 .. stacks ] |> List.map readStack |> State
 
-let GenerateMoves (s: Node<State>) (queue : Node<State> list) (visited : Node<State> list): Node<State> list =
+let getSortedStackList move = let (State gSl) = move.value
+                              List.sortBy string gSl
+
+let GenerateMoves (s) (queue) (visited) =
     let generatePairs (State state) =
         query {
             for stack1 in state do
@@ -125,19 +128,16 @@ let GenerateMoves (s: Node<State>) (queue : Node<State> list) (visited : Node<St
             | s -> s)
         |> State
 
+    let getSortedQV = visited @ (List.map (fun move -> getSortedStackList move) queue)
+    
     s.value
     |> generatePairs
     |> List.filter allowedMove
     |> List.map makeMove
     |> List.map (makeState s.value)
     |> List.map (fun state -> { value = state; parent = Some s; depth = (s.depth + 1) }) //This is all our possible new moves
-    |> List.distinctBy (fun n -> ( let (State ns) = n.value
-                                   List.sortBy string ns))
-    |> List.filter (fun move -> ( let (State ns) = move.value
-                                  let nsl = List.sortBy string ns
-                                  not(List.contains nsl (List.map (fun getState -> let (State gSl) = getState.value
-                                                                                   List.sortBy string gSl) (queue @ visited)))
-                                ) )
+    |> List.distinctBy getSortedStackList
+    |> List.filter (fun move -> not(List.contains (getSortedStackList move) getSortedQV))
     |> List.append queue
 
 let CheckSolved (State s) =
@@ -154,8 +154,8 @@ let Solve (State s) =
         | [] -> None
         | x :: _ when pred x.value -> Some x
         | x :: xs -> match x.depth with
-                     | d when d = currentDepth -> Solve' pred (GenerateMoves x xs visited) (x::visited) currentDepth
-                     | d when d <> currentDepth -> Solve' pred (GenerateMoves x xs visited) (x::visited) (log ("Depth increased to: " + d.ToString() + " QueueSize: " + (xs.Length).ToString()) d)
+                     | d when d = currentDepth -> Solve' pred (GenerateMoves x xs visited) ((getSortedStackList x)::visited) currentDepth
+                     | d when d <> currentDepth -> Solve' pred (GenerateMoves x xs visited) ((getSortedStackList x)::visited) (log ("Depth increased to: " + d.ToString() + " QueueSize: " + (xs.Length).ToString()) d)
 
     Solve' CheckSolved [ { value = State s; parent = None; depth = 0 } ] [] -1
 
