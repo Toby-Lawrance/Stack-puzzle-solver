@@ -94,7 +94,10 @@ let readStack stackNo =
 let rec readInitialState stacks =
     [ 1 .. stacks ] |> List.map readStack |> State
 
-let GenerateMoves (s: Node<State>) (queue : Node<State> list) (visited : Node<State> list): Node<State> list =
+let getSortedStackList move = let (State gSl) = move.value
+                              List.sortBy string gSl
+                              
+let GenerateMoves (s) (queue) (visited) =
     let generatePairs (State state) =
         query {
             for stack1 in state do
@@ -127,12 +130,7 @@ let GenerateMoves (s: Node<State>) (queue : Node<State> list) (visited : Node<St
             | s -> s)
         |> State
 
-    let getState n = n.value
-    let getStack (State st) = st
-    let getSortedQV = (List.map (fun m -> List.sortBy string  (getStack (getState m))) (queue)) @ (List.map (fun mv -> getStack(getState mv)) visited)
-    
-    let getSortedNode move = let (State ns) = move.value
-                             List.sortBy string ns
+    let getSortedQV = visited @ (List.map(fun move -> getSortedStackList move) queue)
     
     s.value
     |> generatePairs
@@ -140,10 +138,8 @@ let GenerateMoves (s: Node<State>) (queue : Node<State> list) (visited : Node<St
     |> List.map makeMove
     |> List.map (makeState s.value)
     |> List.map (fun state -> { value = state; parent = Some s; depth = (s.depth + 1) }) //This is all our possible new moves
-    |> List.distinctBy (fun n -> ( let (State ns) = n.value
-                                   List.sortBy string ns))
-    |> List.filter (fun move -> ( let nsl = getSortedNode move
-                                  not(List.contains nsl (getSortedQV)) ) )    
+    |> List.distinctBy getSortedStackList
+    |> List.filter (fun move -> not(List.contains (getSortedStackList move) (getSortedQV)))
 
 let CheckSolved (State s) =
     let CheckStack st =
@@ -153,20 +149,13 @@ let CheckSolved (State s) =
 
     List.forall CheckStack s
 
-let Solve (State s) =
-    let sortNode move = let (State ns) = move.value
-                        let so = List.sortBy string ns
-                        {move with value = (State so)}
-    
-    let getSortedNode move = let (State ns) = move.value
-                             List.sortBy string ns
-    
+let Solve (State s) =    
     let pSolve (pred) (visited) (queue) =
         async {
             return List.fold (fun acc m -> match acc with
                                            | (_,v,Some y) -> ([],v,Some y)
-                                           | (_,v,None) when pred m.value -> ([],(sortNode m)::v,Some m)
-                                           | (q,v,None) -> (q @ (GenerateMoves m queue v),(sortNode m)::v,None)
+                                           | (_,v,None) when pred m.value -> ([],(getSortedStackList m)::v,Some m)
+                                           | (q,v,None) -> (q @ (GenerateMoves m queue v),(getSortedStackList m)::v,None)
                                            ) ([],visited,None) queue
         }
         
@@ -180,7 +169,7 @@ let Solve (State s) =
                           |> List.fold(fun acc r -> let (q,v,x) = acc
                                                     match r with
                                                     | (_,_,Some x2) -> ([],[],Some x2)
-                                                    | (q2,v2,None) -> (List.distinctBy getSortedNode (q2 @ q), List.distinctBy getSortedNode (v2 @ v), None)) ([],[],None)
+                                                    | (q2,v2,None) -> (List.distinctBy getSortedStackList (q2 @ q), List.distinct (v2 @ v), None)) ([],[],None)
         match taskResult with
         | (_,_,Some x) -> Some x
         | ([],_,None) -> None
