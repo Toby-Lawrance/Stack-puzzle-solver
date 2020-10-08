@@ -169,7 +169,7 @@ let Solve (State s) =
                           |> List.fold(fun acc r -> let (q,v,x) = acc
                                                     match r with
                                                     | (_,_,Some x2) -> ([],[],Some x2)
-                                                    | (q2,v2,None) -> (List.distinctBy getSortedStackList (q2 @ q), List.distinct (v2 @ v), None)) ([],[],None)
+                                                    | (q2,v2,None) -> (List.distinctBy getSortedStackList (q @ q2), List.distinct (v2 @ v), None)) ([],[],None)
         match taskResult with
         | (_,_,Some x) -> Some x
         | ([],_,None) -> None
