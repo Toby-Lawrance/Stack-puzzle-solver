@@ -14,6 +14,9 @@ let logValue (prefix) (value) =
 [<Literal>]
 let maxStackSize = 4
 
+[<Literal>]
+let numThreads = 12
+
 type Piece = Piece of char
 
 type Index = Index of int
@@ -62,8 +65,7 @@ type Node<'a> =
         |> List.unfold (Option.map (fun c -> (c.value,c.parent)))
         |> List.rev
         |> List.map string
-        |> String.concat ",\n"
-        |> sprintf "<%s>"
+        |> String.concat "\n"
 
 let StepToPlace (step: int) =
     match step with
@@ -125,6 +127,13 @@ let GenerateMoves (s: Node<State>) (queue : Node<State> list) (visited : Node<St
             | s -> s)
         |> State
 
+    let getState n = n.value
+    let getStack (State st) = st
+    let getSortedQV = (List.map (fun m -> List.sortBy string  (getStack (getState m))) (queue)) @ (List.map (fun mv -> getStack(getState mv)) visited)
+    
+    let getSortedNode move = let (State ns) = move.value
+                             List.sortBy string ns
+    
     s.value
     |> generatePairs
     |> List.filter allowedMove
@@ -133,12 +142,8 @@ let GenerateMoves (s: Node<State>) (queue : Node<State> list) (visited : Node<St
     |> List.map (fun state -> { value = state; parent = Some s; depth = (s.depth + 1) }) //This is all our possible new moves
     |> List.distinctBy (fun n -> ( let (State ns) = n.value
                                    List.sortBy string ns))
-    |> List.filter (fun move -> ( let (State ns) = move.value
-                                  let nsl = List.sortBy string ns
-                                  not(List.contains nsl (List.map (fun getState -> let (State gSl) = getState.value
-                                                                                   List.sortBy string gSl) (queue @ visited)))
-                                ) )
-    |> List.append queue
+    |> List.filter (fun move -> ( let nsl = getSortedNode move
+                                  not(List.contains nsl (getSortedQV)) ) )    
 
 let CheckSolved (State s) =
     let CheckStack st =
@@ -149,15 +154,40 @@ let CheckSolved (State s) =
     List.forall CheckStack s
 
 let Solve (State s) =
-    let rec Solve' (pred) (queue) (visited) (currentDepth) =
-        match queue with
-        | [] -> None
-        | x :: _ when pred x.value -> Some x
-        | x :: xs -> match x.depth with
-                     | d when d = currentDepth -> Solve' pred (GenerateMoves x xs visited) (x::visited) currentDepth
-                     | d when d <> currentDepth -> Solve' pred (GenerateMoves x xs visited) (x::visited) (log ("Depth increased to: " + d.ToString() + " QueueSize: " + (xs.Length).ToString()) d)
-
-    Solve' CheckSolved [ { value = State s; parent = None; depth = 0 } ] [] -1
+    let sortNode move = let (State ns) = move.value
+                        let so = List.sortBy string ns
+                        {move with value = (State so)}
+    
+    let getSortedNode move = let (State ns) = move.value
+                             List.sortBy string ns
+    
+    let pSolve (pred) (visited) (queue) =
+        async {
+            return List.fold (fun acc m -> match acc with
+                                           | (_,v,Some y) -> ([],v,Some y)
+                                           | (_,v,None) when pred m.value -> ([],(sortNode m)::v,Some m)
+                                           | (q,v,None) -> (q @ (GenerateMoves m queue v),(sortNode m)::v,None)
+                                           ) ([],visited,None) queue
+        }
+        
+    let rec pSolve' (pred) (queue) (visited) (split) =        
+        let taskResult = queue
+                          |> List.splitInto split
+                          |> List.map (pSolve pred visited)
+                          |> Async.Parallel
+                          |> Async.RunSynchronously
+                          |> Array.toList
+                          |> List.fold(fun acc r -> let (q,v,x) = acc
+                                                    match r with
+                                                    | (_,_,Some x2) -> ([],[],Some x2)
+                                                    | (q2,v2,None) -> (List.distinctBy getSortedNode (q2 @ q), List.distinctBy getSortedNode (v2 @ v), None)) ([],[],None)
+        match taskResult with
+        | (_,_,Some x) -> Some x
+        | ([],_,None) -> None
+        | ((x::xs),v,None) -> pSolve' pred ((log ("Reached Depth:" + x.depth.ToString() + " with Queue Size:" + (xs.Length + 1).ToString()) x)::xs) v split
+ 
+    
+    pSolve' CheckSolved [ { value = State s; parent = None; depth = 0 } ] [] numThreads
 
 [<EntryPoint>]
 let main argv =
@@ -166,7 +196,7 @@ let main argv =
         let numberOfStacks = Console.ReadLine() |> int
         let initState = readInitialState numberOfStacks
         Console.WriteLine(initState)
-        match Solve initState with
+        match (Solve initState) with
         | None -> printfn "No solution found"
         | Some x -> printfn "%s" (x.ToString())
     with :? FormatException -> printfn "Invalid Number"
