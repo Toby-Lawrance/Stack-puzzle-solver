@@ -75,15 +75,17 @@ let StepToPlace (step: int) =
     | 3 -> Bottom
     | _ -> failwith "Value off the stack"
 
+let makePiece c =
+    match c with
+    | ' ' -> None
+    | x -> Some(Piece x)
+
 let readPiece step stackNo =
     printf "Enter a piece character (space for blank) for the %A piece on stack %i: " (StepToPlace step) stackNo
 
     let c = Console.ReadKey().KeyChar
     Console.Clear()
-
-    match c with
-    | ' ' -> None
-    | x -> Some(Piece x)
+    makePiece c
 
 let readStack stackNo =
     { stack =
@@ -111,7 +113,7 @@ let GenerateMoves (s) (queue) (visited) =
         match (source.stack, target.stack) with
         | (s :: _, t :: _) when (s = t)
                                 && (List.length target.stack) < maxStackSize -> true
-        | (s :: _, []) -> true
+        | (_ :: _, []) -> true
         | (_, _) -> false
 
     let rec makeMove (source, target) =
@@ -139,44 +141,41 @@ let GenerateMoves (s) (queue) (visited) =
     |> List.map (makeState s.value)
     |> List.map (fun state -> { value = state; parent = Some s; depth = (s.depth + 1) }) //This is all our possible new moves
     |> List.distinctBy getSortedStackList
-    |> List.filter (fun move -> not(List.contains (getSortedStackList move) (getSortedQV)))
+    |> List.filter (fun move -> not (List.contains (getSortedStackList move) getSortedQV))
 
-let CheckSolved (State s) =
-    let CheckStack st =
+let CheckSolved (s) =
+    let CheckStack (st) =
         (List.isEmpty st.stack)
         || ((List.forall (fun x -> (x = st.stack.Head)) st.stack)
             && (List.length st.stack) = maxStackSize)
 
-    List.forall CheckStack s
+    let (State stat) = s.value
+    List.forall CheckStack (stat)
 
 let Solve (State s) =    
-    let pSolve (pred) (visited) (queue) =
+    let pSolve (visited) (queue) =
         async {
-            return List.fold (fun acc m -> match acc with
-                                           | (_,v,Some y) -> ([],v,Some y)
-                                           | (_,v,None) when pred m.value -> ([],(getSortedStackList m)::v,Some m)
-                                           | (q,v,None) -> (q @ (GenerateMoves m queue v),(getSortedStackList m)::v,None)
-                                           ) ([],visited,None) queue
+            return List.fold (fun (q,v) m -> (q @ (GenerateMoves m queue v), (getSortedStackList m) :: v)) ([],visited) queue
         }
         
-    let rec pSolve' (pred) (queue) (visited) (split) =        
-        let taskResult = queue
-                          |> List.splitInto split
-                          |> List.map (pSolve pred visited)
-                          |> Async.Parallel
-                          |> Async.RunSynchronously
-                          |> Array.toList
-                          |> List.fold(fun acc r -> let (q,v,x) = acc
-                                                    match r with
-                                                    | (_,_,Some x2) -> ([],[],Some x2)
-                                                    | (q2,v2,None) -> (List.distinctBy getSortedStackList (q @ q2), List.distinct (v2 @ v), None)) ([],[],None)
-        match taskResult with
-        | (_,_,Some x) -> Some x
-        | ([],_,None) -> None
-        | ((x::xs),v,None) -> pSolve' pred ((log ("Reached Depth:" + x.depth.ToString() + " with Queue Size:" + (xs.Length + 1).ToString()) x)::xs) v split
+    let rec pSolve' (queue) (visited) =        
+        let (newQueue,newVisited) = queue
+                                  |> List.splitInto numThreads
+                                  |> List.map (pSolve visited)
+                                  |> Async.Parallel
+                                  |> Async.RunSynchronously
+                                  |> Array.fold(fun (acc_q,acc_v) (q,v) -> (List.distinctBy getSortedStackList (acc_q @ q),List.distinct (acc_v @ v))) ([],[])                                  
+        
+        if List.isEmpty newQueue then
+            None
+        else
+            Console.WriteLine("Depth: " + newQueue.Head.depth.ToString() + " Queue size: " + newQueue.Length.ToString() + " Visited Size: " + newVisited.Length.ToString())
+            List.tryFind CheckSolved newQueue
+            |> Option.orElseWith (fun () -> pSolve' newQueue newVisited)
+        
  
     
-    pSolve' CheckSolved [ { value = State s; parent = None; depth = 0 } ] [] numThreads
+    pSolve' [ { value = State s; parent = None; depth = 0 } ] []
 
 [<EntryPoint>]
 let main argv =
@@ -184,7 +183,6 @@ let main argv =
         Console.Write("Enter the number of stacks: ")
         let numberOfStacks = Console.ReadLine() |> int
         let initState = readInitialState numberOfStacks
-        Console.WriteLine(initState)
         match (Solve initState) with
         | None -> printfn "No solution found"
         | Some x -> printfn "%s" (x.ToString())
